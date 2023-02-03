@@ -52,7 +52,7 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 MechatronicEye eye = MechatronicEye(VERT_SERVO, HORZ_SERVO);
 EyeServoCommand command;
 
-
+void debug_filter_serial_plotter();
 
 void setup() {
   //pinMode(LED_BUILTIN, OUTPUT);
@@ -100,25 +100,27 @@ void loop() {
     horizontal_read = ps2x.Analog(PSS_RX);
     vertical_read = ps2x.Analog(PSS_RY);
 
-    _horz_filt.update(horizontal_read);
-    _vert_filt.update(vertical_read);
-
-    command = eye.lookXY(horizontal_read, vertical_read);
-
-    Serial.print("Horz_raw:");
-    Serial.print(horizontal_read);
-    Serial.print(",");
-    Serial.print("Horz_filt:");
-    Serial.print(_horz_filt.update(horizontal_read));
-    Serial.print(",");
-    Serial.print("Vert_raw:");
-    Serial.print(vertical_read);
-    Serial.print(",");
-    Serial.print("Vert_filt:");
-    Serial.println(_vert_filt.update(vertical_read));
+    command = eye.lookXY(
+        _horz_filt.update(horizontal_read),
+        _vert_filt.update(vertical_read));
 
     pwm.setPWM(command.horizontal_index, 0, command.horizontal_value);
     pwm.setPWM(command.vertical_index, 0, command.vertical_value);
     
     
+}
+
+void debug_filter_serial_plotter()
+{
+  Serial.print("Horz_raw:");
+  Serial.print(horizontal_read);
+  Serial.print(",");
+  Serial.print("Horz_filt:");
+  Serial.print(_horz_filt.getState());
+  Serial.print(",");
+  Serial.print("Vert_raw:");
+  Serial.print(vertical_read);
+  Serial.print(",");
+  Serial.print("Vert_filt:");
+  Serial.println(_vert_filt.getState());
 }
