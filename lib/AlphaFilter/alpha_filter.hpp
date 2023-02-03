@@ -42,7 +42,8 @@
 
 /**
  * The ALphaFilter implementation is taken from the PX4 repository and slightly
- * modified to run on the Arduino
+ * modified to run on the Arduino. The original source can be found here:
+ * https://github.com/PX4/PX4-Autopilot/blob/main/src/lib/mathlib/math/filter/AlphaFilter.hpp
  */
 
 #pragma once
