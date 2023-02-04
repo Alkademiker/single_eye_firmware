@@ -28,10 +28,10 @@ MechatronicEye::~MechatronicEye()
 /// @return EyeServoCommand containing the servo commands
 EyeServoCommand MechatronicEye::lookXY(int horizontal, int vertical)
 {
-    this->_commands.horizontal_value = map(horizontal, 0, 1000, 
+    this->_commands.horizontal_value = map(horizontal, 0, 255, 
                 _limits._left_limit, _limits._right_limit);
 
-    this->_commands.vertical_value = map(vertical, 0, 1000,
+    this->_commands.vertical_value = map(vertical, 0, 255,
                 _limits._top_limit, _limits._bottom_limit);
     
     return _commands;

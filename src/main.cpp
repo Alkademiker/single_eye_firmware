@@ -54,27 +54,53 @@ EyeServoCommand command;
 
 void debug_filter_serial_plotter();
 
+void calibration_routine();
+
+void setServoPulse(uint8_t servo, double pulse);
+
+enum MODES {
+  DUAL_MANUAL,
+  SINGLE_MANUAL,
+  RANDOM_WALK
+};
+
+enum STATES {
+  INIT,
+  NORMAL,
+  CONTROLLER_TIMED_OUT,  // --> always go into random walk
+  CALIBRATION
+};
+
+enum CALIBRATION_STATES {
+  START_CENTERED,
+  HORIZONTAL,
+  VERTICAL,
+  DONE
+};
+
+MODES current_mode = SINGLE_MANUAL;
+STATES current_state = INIT;
+CALIBRATION_STATES calibration_state = START_CENTERED;
+
 void setup() {
-  //pinMode(LED_BUILTIN, OUTPUT);
 
   Serial.begin(57600);
 
-  delay(1000); // added delay to give wireless ps2 module some time to startup, before configuring it
+  delay(4000); // added delay to give wireless ps2 module some time to startup, before configuring it
 
   pwm.begin(); // Powering up the servo board
   pwm.setOscillatorFrequency(27000000);
   pwm.setPWMFreq(SERVO_FREQ);
   delay(1000);
-  // Serial.println("Ready to Look!\r");
 
   // Init Eye
-  eye.setLeftLimit(335);
-  eye.setHorizontalCenter(375);
-  eye.setRightLimit(415);
+  eye.setLeftLimit(345);
+  eye.setHorizontalCenter(297);
+  eye.setRightLimit(255);
 
-  eye.setTopLimit(330);
-  eye.setVerticalCenter(370);
-  eye.setBottomLimit(410);
+  eye.setTopLimit(250);
+  eye.setVerticalCenter(320);
+  eye.setBottomLimit(390);
 
   // Init Alpha Filters
   _vert_filt.setAlpha(0.055);
@@ -90,11 +116,23 @@ void setup() {
   error = 0;
   type = 3;
 
+  if (ps2x.ButtonPressed(PSB_SELECT)){
+    current_state = CALIBRATION;
+  }
 }
 
 void loop() {
 
-                              // DualShock Controller
+  switch (current_state)
+  {
+  case CALIBRATION:
+    calibration_routine();
+    break;
+  default:
+
+    break;
+  }
+
     ps2x.read_gamepad(false, vibrate); // read controller and set large motor to spin at 'vibrate' speed
 
     horizontal_read = ps2x.Analog(PSS_RX);
@@ -110,6 +148,79 @@ void loop() {
     
 }
 
+void calibration_routine()
+{
+  bool x_was_pressed = ps2x.ButtonReleased(PSB_CROSS);
+  int analog = 127;
+  double calibration_value = 1500;
+
+  switch (calibration_state)
+  {
+  case START_CENTERED:
+    setServoPulse(VERT_SERVO, 1500);
+    setServoPulse(HORZ_SERVO, 1500);
+    
+    if (x_was_pressed)
+    {
+      calibration_state = HORIZONTAL;
+      delay(100);
+    }
+    break;
+  case HORIZONTAL:
+    while (! x_was_pressed)
+    {
+      ps2x.read_gamepad();
+      analog = ps2x.Analog(PSS_RX);
+      calibration_value = map(analog,
+                              0, 255,
+                              800, 2200);
+
+      Serial.print("Center Horizontal ");
+      setServoPulse(HORZ_SERVO, calibration_value);  
+      delay(30);
+      x_was_pressed = ps2x.ButtonReleased(PSB_CROSS);
+    }
+    
+    calibration_state = VERTICAL;
+    
+    break;
+  case VERTICAL:
+    while (!x_was_pressed)
+    {
+      ps2x.read_gamepad();
+      analog = ps2x.Analog(PSS_RY);
+      calibration_value = map(analog,
+                              0, 255,
+                              800, 2200);
+
+      Serial.print("Center Horizontal ");
+      setServoPulse(VERT_SERVO, calibration_value);
+      pwm.setPWM(HORZ_SERVO, 0, 297);
+
+      delay(30);
+      x_was_pressed = ps2x.ButtonReleased(PSB_CROSS);
+    }
+    calibration_state = DONE;
+    break;
+
+  case DONE:
+  default:
+
+    Serial.println("We have reached end.");
+    while (true)
+    {
+      /* code */
+    }
+    
+    break;
+  }
+  Serial.print("Current State");
+  Serial.println(calibration_state);
+
+  delay(100);
+
+}
+
 void debug_filter_serial_plotter()
 {
   Serial.print("Horz_raw:");
@@ -123,4 +234,22 @@ void debug_filter_serial_plotter()
   Serial.print(",");
   Serial.print("Vert_filt:");
   Serial.println(_vert_filt.getState());
+}
+
+// you can use this function if you'd like to set the pulse length in seconds
+// e.g. setServoPulse(0, 0.001) is a ~1 millisecond pulse width. its not precise!
+void setServoPulse(uint8_t servo, double pulse)
+{
+  double pulselength;
+
+  pulselength = 1000000; // 1,000,000 us per second
+  pulselength /= SERVO_FREQ; // in Hz
+  //Serial.print(pulselength);
+  //Serial.println(" us per period");
+  pulselength /= 4096; // 12 bits of resolution
+  //Serial.print(pulselength);
+  //Serial.println(" us per bit");
+  pulse /= pulselength;
+  Serial.println(pulse);
+  pwm.setPWM(servo, 0, pulse);
 }
