@@ -26,6 +26,35 @@ struct EyeServoCommand
     int vertical_value;
 };
 
+enum EyePositions
+{
+    CENTER,
+    // horizontal
+    LEFT,
+    MID_LEFT,
+    MID_RIGHT,
+    RIGHT,
+
+    // vertical
+    TOP,
+    MID_TOP,
+    MID_BOTTOM,
+    BOTTOM,
+
+    // Mid Mixed
+    MID_TOP_RIGHT,
+    MID_BOTTOM_RIGHT,
+    MID_BOTTOM_LEFT,
+    MID_TOP_LEFT,
+
+    // Mixed
+    TOP_RIGHT,
+    BOTTOM_RIGHT,
+    BOTTOM_LEFT,
+    TOP_LEFT,
+
+};
+
 class MechatronicEye
 {
 private:
@@ -60,7 +89,12 @@ public:
 
     EyeServoCommand lookXY(int horizontal, int vertical);
 
+    EyeServoCommand lookAt(EyePositions position);
+    EyeServoCommand randomWalk();
+
     // Extremes
+    EyeServoCommand lookCenter();
+
     EyeServoCommand lookUp();
     EyeServoCommand lookDown();
 

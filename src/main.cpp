@@ -49,6 +49,8 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 #define VERT_SERVO 0
 #define HORZ_SERVO 1
 
+#define RAND_INTERVAL 2000  // Interval that defines the gap between two random movements
+
 MechatronicEye eye = MechatronicEye(VERT_SERVO, HORZ_SERVO);
 EyeServoCommand command;
 
@@ -78,9 +80,11 @@ enum CALIBRATION_STATES {
   DONE
 };
 
-MODES current_mode = SINGLE_MANUAL;
+MODES current_mode = RANDOM_WALK;
 STATES current_state = INIT;
 CALIBRATION_STATES calibration_state = START_CENTERED;
+
+unsigned long timer_value_random_walk = 0;
 
 void setup() {
 
@@ -119,9 +123,16 @@ void setup() {
   if (ps2x.ButtonPressed(PSB_SELECT)){
     current_state = CALIBRATION;
   }
+  else
+  {
+    current_state = NORMAL;
+  }
 }
 
 void loop() {
+
+  // TODO: check if controller timed out
+  // if yes go into normal state and random walk
 
   switch (current_state)
   {
@@ -130,20 +141,64 @@ void loop() {
     break;
   default:
 
-    break;
-  }
-
     ps2x.read_gamepad(false, vibrate); // read controller and set large motor to spin at 'vibrate' speed
 
-    horizontal_read = ps2x.Analog(PSS_RX);
-    vertical_read = ps2x.Analog(PSS_RY);
+    switch (current_mode)
+    {
+    case SINGLE_MANUAL:
+    case DUAL_MANUAL:
+      horizontal_read = map(_horz_filt.update(ps2x.Analog(PSS_RX)),
+                            0, 255,
+                            0, 10000);
+      vertical_read = map(_vert_filt.update(ps2x.Analog(PSS_RY)),
+                          0, 255,
+                          0, 10000);
 
-    command = eye.lookXY(
-        _horz_filt.update(horizontal_read),
-        _vert_filt.update(vertical_read));
+      command = eye.lookXY(horizontal_read, vertical_read);
 
-    pwm.setPWM(command.horizontal_index, 0, command.horizontal_value);
-    pwm.setPWM(command.vertical_index, 0, command.vertical_value);
+      pwm.setPWM(command.horizontal_index, 0, command.horizontal_value);
+      pwm.setPWM(command.vertical_index, 0, command.vertical_value);
+      break;
+    
+    case RANDOM_WALK:
+      timer_value_random_walk += 1;
+      if (timer_value_random_walk >= RAND_INTERVAL)
+      {
+        Serial.println("New position");
+        command = eye.randomWalk();
+        timer_value_random_walk = 0;
+      }  
+
+      pwm.setPWM(command.horizontal_index, 0, command.horizontal_value);
+      pwm.setPWM(command.vertical_index, 0, command.vertical_value);
+
+    default:
+      break;
+    }
+
+    // Mode switch: Keep R2 pressed and switch to new mode with triangle
+    if (ps2x.NewButtonState())
+    {
+      if (ps2x.Button(PSB_R2))
+      {
+        if (ps2x.ButtonReleased(PSB_TRIANGLE))
+        {
+          Serial.print("New Mode: ");
+          int temp = (int)current_mode;
+          temp += 1;
+          if (temp > 2)
+          {
+            temp = 0;
+          }
+          current_mode = (MODES)temp;
+          Serial.println(temp);
+        }
+      }
+    }
+      break;
+  }
+
+  delay(1);
     
     
 }
