@@ -104,6 +104,7 @@ EyeServoCommand MechatronicEye::lookAt(EyePositions position)
     return ret;
 }
 
+// Functional Programs
 
 EyeServoCommand MechatronicEye::randomWalk()
 {
@@ -111,6 +112,31 @@ EyeServoCommand MechatronicEye::randomWalk()
     Serial.print("Random number: ");
     Serial.println(rand);
     return lookAt((EyePositions)rand);
+}
+
+EyeServoCommand MechatronicEye::deadRoll(int i)
+{
+    int j = static_cast<int>(i % 8);
+
+    switch (j)
+    {
+    case 0:
+        return this->lookMidUp();
+    case 1:
+        return this->lookMidUpRight();
+    case 2:
+        return this->lookMidRight();
+    case 3:
+        return this->lookMidDownRight();
+    case 4:
+        return this->lookMidDown();
+    case 5:
+        return this->lookMidDownLeft();
+    case 6:
+        return this->lookMidLeft();
+    case 7:
+        return this->lookMidUpLeft();
+    }
 }
 
 // Extremes

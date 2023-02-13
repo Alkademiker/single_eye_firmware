@@ -91,6 +91,8 @@ public:
 
     EyeServoCommand lookAt(EyePositions position);
     EyeServoCommand randomWalk();
+    EyeServoCommand deadRoll(int i);
+
 
     // Extremes
     EyeServoCommand lookCenter();

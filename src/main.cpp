@@ -36,23 +36,36 @@ int error = 0;
 byte type = 0;
 byte vibrate = 0;
 
-int vertical_read = 127;
-int horizontal_read = 127;
+// Left Eye
+int left_vertical_read = 127;
+int left_horizontal_read = 127;
 
-AlphaFilter<int> _vert_filt;
-AlphaFilter<int> _horz_filt;
+AlphaFilter<int> _left_vert_filt;
+AlphaFilter<int> _left_horz_filt;
+
+// Right Eye
+int right_vertical_read = 127;
+int right_horizontal_read = 127;
+
+AlphaFilter<int> _right_vert_filt;
+AlphaFilter<int> _right_horz_filt;
 //-----------------------------
 
 #define SERVO_FREQ 50 // Analog servos run at ~50 Hz updates
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
-#define VERT_SERVO 0
-#define HORZ_SERVO 1
+#define LEFT_VERT_SERVO 0
+#define LEFT_HORZ_SERVO 1
 
-#define RAND_INTERVAL 2000  // Interval that defines the gap between two random movements
+#define RIGHT_VERT_SERVO 2
+#define RIGHT_HORZ_SERVO 3
 
-MechatronicEye eye = MechatronicEye(VERT_SERVO, HORZ_SERVO);
-EyeServoCommand command;
+
+MechatronicEye left_eye = MechatronicEye(LEFT_VERT_SERVO, LEFT_HORZ_SERVO);
+EyeServoCommand left_command;
+
+MechatronicEye right_eye = MechatronicEye(RIGHT_VERT_SERVO, RIGHT_HORZ_SERVO);
+EyeServoCommand right_command;
 
 void debug_filter_serial_plotter();
 
@@ -63,7 +76,8 @@ void setServoPulse(uint8_t servo, double pulse);
 enum MODES {
   DUAL_MANUAL,
   SINGLE_MANUAL,
-  RANDOM_WALK
+  RANDOM_WALK,
+  PLAY_DEAD, // Turn the eyes around,
 };
 
 enum STATES {
@@ -84,7 +98,11 @@ MODES current_mode = RANDOM_WALK;
 STATES current_state = INIT;
 CALIBRATION_STATES calibration_state = START_CENTERED;
 
-unsigned long timer_value_random_walk = 0;
+unsigned long timer_value = 0;
+#define RAND_INTERVAL 2000 // Interval that defines the gap between two random movements
+
+#define DEAD_INTERVAL 400 // Interval that defines the gap between two random movements
+int play_dead_index = 0;
 
 void setup() {
 
@@ -98,21 +116,32 @@ void setup() {
   delay(1000);
 
   // Init Eye
-  eye.setLeftLimit(345);
-  eye.setHorizontalCenter(297);
-  eye.setRightLimit(255);
+  // left eye
+  left_eye.setLeftLimit(345);
+  left_eye.setHorizontalCenter(297);
+  left_eye.setRightLimit(255);
 
-  eye.setTopLimit(250);
-  eye.setVerticalCenter(320);
-  eye.setBottomLimit(390);
+  left_eye.setTopLimit(250);
+  left_eye.setVerticalCenter(320);
+  left_eye.setBottomLimit(390);
+
+  // right eye
+  right_eye.setLeftLimit(345);
+  right_eye.setHorizontalCenter(297);
+  right_eye.setRightLimit(255);
+
+  right_eye.setTopLimit(250);
+  right_eye.setVerticalCenter(320);
+  right_eye.setBottomLimit(390);
 
   // Init Alpha Filters
-  _vert_filt.setAlpha(0.055);
-  _horz_filt.setAlpha(0.055); 
+  _left_vert_filt.setAlpha(0.055);
+  _left_horz_filt.setAlpha(0.055);
+  _right_vert_filt.setAlpha(0.055);
+  _right_horz_filt.setAlpha(0.055);
 
   delay(1000);
 
-  
   error = ps2x.config_gamepad(PS2_CLK, PS2_CMD, PS2_SEL, PS2_DAT, pressures, rumble);
 
   type = ps2x.readType();
@@ -146,35 +175,79 @@ void loop() {
     switch (current_mode)
     {
     case SINGLE_MANUAL:
+      right_horizontal_read = map(_right_horz_filt.update(ps2x.Analog(PSS_RX)),
+                                 0, 255,
+                                 0, 10000);
+      right_vertical_read = map(_right_vert_filt.update(ps2x.Analog(PSS_RY)),
+                               0, 255,
+                               0, 10000);
+
+      left_command = left_eye.lookXY(right_horizontal_read, right_vertical_read);
+      right_command = right_eye.lookXY(right_horizontal_read, right_vertical_read);
+
+      break;
+
     case DUAL_MANUAL:
-      horizontal_read = map(_horz_filt.update(ps2x.Analog(PSS_RX)),
+      // Both Eyes can be controlled individually
+
+      // Left
+      left_horizontal_read = map(_left_horz_filt.update(ps2x.Analog(PSS_LX)),
                             0, 255,
                             0, 10000);
-      vertical_read = map(_vert_filt.update(ps2x.Analog(PSS_RY)),
+      left_vertical_read = map(_left_vert_filt.update(ps2x.Analog(PSS_LY)),
                           0, 255,
                           0, 10000);
 
-      command = eye.lookXY(horizontal_read, vertical_read);
+      left_command = left_eye.lookXY(left_horizontal_read, left_vertical_read);
 
-      pwm.setPWM(command.horizontal_index, 0, command.horizontal_value);
-      pwm.setPWM(command.vertical_index, 0, command.vertical_value);
+
+      // Right
+      right_horizontal_read = map(_right_horz_filt.update(ps2x.Analog(PSS_RX)),
+                                 0, 255,
+                                 0, 10000);
+      right_vertical_read = map(_right_vert_filt.update(ps2x.Analog(PSS_RY)),
+                               0, 255,
+                               0, 10000);
+
+      right_command = right_eye.lookXY(right_horizontal_read, right_vertical_read);
       break;
     
     case RANDOM_WALK:
-      timer_value_random_walk += 1;
-      if (timer_value_random_walk >= RAND_INTERVAL)
+      timer_value += 1;
+      if (timer_value >= RAND_INTERVAL)
       {
         Serial.println("New position");
-        command = eye.randomWalk();
-        timer_value_random_walk = 0;
+        left_command = left_eye.randomWalk();
+        right_command = right_eye.randomWalk();
+        timer_value = 0;
       }  
 
-      pwm.setPWM(command.horizontal_index, 0, command.horizontal_value);
-      pwm.setPWM(command.vertical_index, 0, command.vertical_value);
+      
+
+      break;
+
+    case PLAY_DEAD:
+      timer_value += 1;
+      if (timer_value >= DEAD_INTERVAL)
+      {
+        Serial.println("DEAD: New position");
+        left_command = left_eye.deadRoll(play_dead_index); // CW
+        right_command = right_eye.deadRoll(-play_dead_index-1); // inverse index --> CCW
+        timer_value = 0;
+        play_dead_index = (play_dead_index + 1) % 8;
+      }
+
+      break;
 
     default:
       break;
     }
+
+    // set the pwm values no matter what mode
+    pwm.setPWM(left_command.horizontal_index, 0, left_command.horizontal_value);
+    pwm.setPWM(left_command.vertical_index, 0, left_command.vertical_value);
+    pwm.setPWM(right_command.horizontal_index, 0, right_command.horizontal_value);
+    pwm.setPWM(right_command.vertical_index, 0, right_command.vertical_value);
 
     // Mode switch: Keep R2 pressed and switch to new mode with triangle
     if (ps2x.NewButtonState())
@@ -212,8 +285,8 @@ void calibration_routine()
   switch (calibration_state)
   {
   case START_CENTERED:
-    setServoPulse(VERT_SERVO, 1500);
-    setServoPulse(HORZ_SERVO, 1500);
+    setServoPulse(LEFT_VERT_SERVO, 1500);
+    setServoPulse(LEFT_HORZ_SERVO, 1500);
     
     if (x_was_pressed)
     {
@@ -231,7 +304,7 @@ void calibration_routine()
                               800, 2200);
 
       Serial.print("Center Horizontal ");
-      setServoPulse(HORZ_SERVO, calibration_value);  
+      setServoPulse(LEFT_HORZ_SERVO, calibration_value);  
       delay(30);
       x_was_pressed = ps2x.ButtonReleased(PSB_CROSS);
     }
@@ -249,8 +322,8 @@ void calibration_routine()
                               800, 2200);
 
       Serial.print("Center Horizontal ");
-      setServoPulse(VERT_SERVO, calibration_value);
-      pwm.setPWM(HORZ_SERVO, 0, 297);
+      setServoPulse(LEFT_VERT_SERVO, calibration_value);
+      pwm.setPWM(LEFT_HORZ_SERVO, 0, 297);
 
       delay(30);
       x_was_pressed = ps2x.ButtonReleased(PSB_CROSS);
@@ -279,16 +352,16 @@ void calibration_routine()
 void debug_filter_serial_plotter()
 {
   Serial.print("Horz_raw:");
-  Serial.print(horizontal_read);
+  Serial.print(left_horizontal_read);
   Serial.print(",");
   Serial.print("Horz_filt:");
-  Serial.print(_horz_filt.getState());
+  Serial.print(_left_horz_filt.getState());
   Serial.print(",");
   Serial.print("Vert_raw:");
-  Serial.print(vertical_read);
+  Serial.print(left_vertical_read);
   Serial.print(",");
   Serial.print("Vert_filt:");
-  Serial.println(_vert_filt.getState());
+  Serial.println(_left_vert_filt.getState());
 }
 
 // you can use this function if you'd like to set the pulse length in seconds
