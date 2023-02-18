@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include "alpha_filter.hpp"
+
 #define ADA_SERV_MAX 4096
 #define ADA_SERV_MIN 0
 
@@ -21,9 +23,11 @@ struct EyeServoCommand
 {
     int horizontal_index;
     int horizontal_value;
+    AlphaFilter<int> horizontal_value_filt;
 
     int vertical_index;
     int vertical_value;
+    AlphaFilter<int> vertical_value_filt;
 };
 
 enum EyePositions
@@ -64,6 +68,9 @@ private:
     // calibration data
     EyeLimit _limits;
 
+    int _last_rand_value;
+    int _last_dead_value;
+
 public:
     MechatronicEye(
         int vertical_servo, 
@@ -87,12 +94,19 @@ public:
     void setBottomLimit(int limit);
     void setVerticalCenter(int center);
 
+    // getters
+    int getLastRandVal();
+    int getLastDeadVal();
+
     EyeServoCommand lookXY(int horizontal, int vertical);
 
     EyeServoCommand lookAt(EyePositions position);
     EyeServoCommand randomWalk();
-    EyeServoCommand deadRoll(int i);
+    EyeServoCommand randomWalk(int rand_number);
 
+    EyeServoCommand deadRoll(); // keep looking at last dead val
+
+    EyeServoCommand deadRoll(int i);
 
     // Extremes
     EyeServoCommand lookCenter();

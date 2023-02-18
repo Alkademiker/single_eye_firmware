@@ -73,9 +73,11 @@ void calibration_routine();
 
 void setServoPulse(uint8_t servo, double pulse);
 
-enum MODES {
+enum MODES
+{
   DUAL_MANUAL,
   SINGLE_MANUAL,
+  RANDOM_WALK_TOGETHER,
   RANDOM_WALK,
   PLAY_DEAD, // Turn the eyes around,
 };
@@ -117,22 +119,23 @@ void setup() {
 
   // Init Eye
   // left eye
-  left_eye.setLeftLimit(345);
-  left_eye.setHorizontalCenter(297);
-  left_eye.setRightLimit(255);
+  // left eye  further up further left
+  left_eye.setLeftLimit(340);
+  left_eye.setHorizontalCenter(290); // 320
+  left_eye.setRightLimit(250);
 
-  left_eye.setTopLimit(250);
-  left_eye.setVerticalCenter(320);
-  left_eye.setBottomLimit(390);
+  left_eye.setTopLimit(200);
+  left_eye.setVerticalCenter(260); //340
+  left_eye.setBottomLimit(340);
 
   // right eye
-  right_eye.setLeftLimit(345);
-  right_eye.setHorizontalCenter(297);
-  right_eye.setRightLimit(255);
+  right_eye.setLeftLimit(340);
+  right_eye.setHorizontalCenter(290);
+  right_eye.setRightLimit(250);
 
-  right_eye.setTopLimit(250);
-  right_eye.setVerticalCenter(320);
-  right_eye.setBottomLimit(390);
+  right_eye.setTopLimit(200);
+  right_eye.setVerticalCenter(260);
+  right_eye.setBottomLimit(340);
 
   // Init Alpha Filters
   _left_vert_filt.setAlpha(0.055);
@@ -220,9 +223,25 @@ void loop() {
         left_command = left_eye.randomWalk();
         right_command = right_eye.randomWalk();
         timer_value = 0;
-      }  
+      }
+      // Update alpha filter
+      left_command = left_eye.randomWalk(left_eye.getLastRandVal());
+      right_command = right_eye.randomWalk(right_eye.getLastRandVal());
 
-      
+      break;
+
+    case RANDOM_WALK_TOGETHER:
+      timer_value += 1;
+      if (timer_value >= RAND_INTERVAL)
+      {
+        Serial.println("New position");
+        left_command = left_eye.randomWalk();
+        right_command = right_eye.randomWalk(left_eye.getLastRandVal());
+        timer_value = 0;
+      }
+      // Update Alpha filter
+      left_command = left_eye.randomWalk(left_eye.getLastRandVal());
+      right_command = right_eye.randomWalk(left_eye.getLastRandVal());
 
       break;
 
@@ -236,6 +255,8 @@ void loop() {
         timer_value = 0;
         play_dead_index = (play_dead_index + 1) % 8;
       }
+      left_command = left_eye.deadRoll(play_dead_index); // CW
+      right_command = right_eye.deadRoll(-play_dead_index - 1);
 
       break;
 
@@ -244,10 +265,10 @@ void loop() {
     }
 
     // set the pwm values no matter what mode
-    pwm.setPWM(left_command.horizontal_index, 0, left_command.horizontal_value);
-    pwm.setPWM(left_command.vertical_index, 0, left_command.vertical_value);
-    pwm.setPWM(right_command.horizontal_index, 0, right_command.horizontal_value);
-    pwm.setPWM(right_command.vertical_index, 0, right_command.vertical_value);
+    pwm.setPWM(left_command.horizontal_index, 0, left_command.horizontal_value_filt.getState());
+    pwm.setPWM(left_command.vertical_index, 0, left_command.vertical_value_filt.getState());
+    pwm.setPWM(right_command.horizontal_index, 0, right_command.horizontal_value_filt.getState());
+    pwm.setPWM(right_command.vertical_index, 0, right_command.vertical_value_filt.getState());
 
     // Mode switch: Keep R2 pressed and switch to new mode with triangle
     if (ps2x.NewButtonState())
@@ -259,7 +280,7 @@ void loop() {
           Serial.print("New Mode: ");
           int temp = (int)current_mode;
           temp += 1;
-          if (temp > 2)
+          if (temp > 6)
           {
             temp = 0;
           }

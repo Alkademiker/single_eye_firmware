@@ -4,17 +4,24 @@
 MechatronicEye::MechatronicEye(int vertical_servo, int horizontal_servo) 
     : _commands(), _limits()
 {
-    _commands.vertical_index= vertical_servo;  
-    _commands.horizontal_index = horizontal_servo; 
+    _commands.vertical_index= vertical_servo;      
+    _commands.horizontal_index = horizontal_servo;
+
+    _commands.horizontal_value_filt.setAlpha(0.7);
+    _commands.vertical_value_filt.setAlpha(0.7);
 }
 
 MechatronicEye::MechatronicEye(int vertical_servo,
                                int horizontal_servo,
                                EyeLimit limits)
     : _commands()
-{
+{   
+    _commands.horizontal_value_filt.setAlpha(0.7);
+    _commands.vertical_value_filt.setAlpha(0.7);
+
     _commands.vertical_index = vertical_servo;
     _commands.horizontal_index = horizontal_servo;
+
     _limits = limits;
 }
 
@@ -22,9 +29,19 @@ MechatronicEye::~MechatronicEye()
 {
 }
 
-/// @brief Calculates the servo command from an u_int8 input (0-255)
-/// @param horizontal 0-1000, where 500 is the center, 0 is left and 1000 is right
-/// @param vertical 0-1000, where 500 is the center, 0 is the top and 1000 is the bottom
+int MechatronicEye::getLastRandVal()
+{
+    return this->_last_rand_value;
+}
+
+int MechatronicEye::getLastDeadVal()
+{
+    return this->_last_dead_value;
+}
+
+/// @brief Calculates the servo command from an int input (0-10000)
+/// @param horizontal 0-10000, where 5000 is the center, 0 is left and 10000 is right
+/// @param vertical 0-10000, where 5000 is the center, 0 is the top and 10000 is the bottom
 /// @return EyeServoCommand containing the servo commands
 EyeServoCommand MechatronicEye::lookXY(int horizontal, int vertical)
 {
@@ -37,6 +54,12 @@ EyeServoCommand MechatronicEye::lookXY(int horizontal, int vertical)
 
     this->_commands.vertical_value = map(vertical, 0, 10000,
                 _limits._top_limit, _limits._bottom_limit);
+
+    this->_commands.horizontal_value_filt.update(map(horizontal, 0, 10000,
+                                           _limits._left_limit, _limits._right_limit));
+
+    this->_commands.vertical_value_filt.update(map(vertical, 0, 10000,
+                                         _limits._top_limit, _limits._bottom_limit));
 
     // Serial.print("out h: ");
     // Serial.print(this->_commands.horizontal_value);
@@ -108,15 +131,25 @@ EyeServoCommand MechatronicEye::lookAt(EyePositions position)
 
 EyeServoCommand MechatronicEye::randomWalk()
 {
-    int rand = random(13);
-    Serial.print("Random number: ");
-    Serial.println(rand);
-    return lookAt((EyePositions)rand);
+    this->_last_rand_value = random(13);
+    
+    return this->randomWalk(this->_last_rand_value);
+}
+
+EyeServoCommand MechatronicEye::randomWalk(int rand_number)
+{
+    return lookAt((EyePositions)rand_number);
+}
+
+EyeServoCommand MechatronicEye::deadRoll()
+{
+    this->deadRoll(this->_last_dead_value);
 }
 
 EyeServoCommand MechatronicEye::deadRoll(int i)
 {
     int j = static_cast<int>(i % 8);
+    this->_last_dead_value = j;
 
     switch (j)
     {
